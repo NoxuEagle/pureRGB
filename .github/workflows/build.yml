@@ -1,0 +1,82 @@
+# PureRGB personal-tweak build workflow (v2 — fast version)
+# Create the folder .github/workflows/ in your repo and save this file there as
+# "build.yml" (full path: .github/workflows/build.yml).
+#
+# What changed vs the first version: the assembler (rgbds) is now downloaded as
+# prebuilt binaries from its official release instead of being compiled from
+# source on every run. Verified locally: the actual game build itself takes only
+# seconds; the toolchain was the slow part.
+#
+# Two jobs run in parallel on every push:
+#   - "green"  : builds ONLY pokegreen.gbc  -> artifact "puregreen"
+#   - "all"    : builds all four ROMs       -> artifact "puregb-roms"
+# You normally only download the "puregreen" artifact (ready a few seconds into
+# the run). The "all" job exists purely as the optional other-versions copy.
+#
+# The toolchain is pinned to rgbds v1.0.4, exactly what PureRGB's INSTALL.md
+# requires, so the build environment is identical every time.
+
+name: Build ROM
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:   # adds a "Run workflow" button on the Actions tab
+
+env:
+  rgbds_version: v1.0.4
+
+jobs:
+  green:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your repo
+        uses: actions/checkout@v4
+
+      - name: Install rgbds (prebuilt, pinned)
+        run: |
+          curl -sL -o /tmp/rgbds.tar.xz \
+            "https://github.com/gbdev/rgbds/releases/download/${{ env.rgbds_version }}/rgbds-linux-x86_64.tar.xz"
+          sudo mkdir -p /usr/local/bin
+          sudo tar -xJf /tmp/rgbds.tar.xz -C /usr/local/bin rgbasm rgblink rgbfix rgbgfx
+          rgbasm --version
+
+      - name: Build PureGreen
+        run: make -j$(nproc) pokegreen.gbc
+
+      - name: Upload PureGreen
+        uses: actions/upload-artifact@v4
+        with:
+          name: puregreen
+          path: pokegreen.gbc
+          retention-days: 90
+          if-no-files-found: error
+
+  all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your repo
+        uses: actions/checkout@v4
+
+      - name: Install rgbds (prebuilt, pinned)
+        run: |
+          curl -sL -o /tmp/rgbds.tar.xz \
+            "https://github.com/gbdev/rgbds/releases/download/${{ env.rgbds_version }}/rgbds-linux-x86_64.tar.xz"
+          sudo mkdir -p /usr/local/bin
+          sudo tar -xJf /tmp/rgbds.tar.xz -C /usr/local/bin rgbasm rgblink rgbfix rgbgfx
+          rgbasm --version
+
+      - name: Build all four ROMs
+        run: make -j$(nproc)
+
+      - name: Upload all ROMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: puregb-roms
+          path: |
+            pokered.gbc
+            pokeblue.gbc
+            pokegreen.gbc
+            pokeblue_debug.gbc
+          retention-days: 90
+          if-no-files-found: error
